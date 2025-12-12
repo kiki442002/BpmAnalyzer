@@ -3,7 +3,9 @@ from scipy import signal
 import threading
 import ExtractBpmPatterns
 from threading import Thread
-
+import traceback
+import sys
+from time import sleep
 
 
 
@@ -35,6 +37,12 @@ class BpmAnalyzer:
             self.BPM_PATTERN_FINE_130 = np.load("./patterns/130_bpm_pattern_fine.npy")
             self.BPM_PATTERN_210 = np.load("./patterns/210_bpm_pattern.npy")
             self.BPM_PATTERN_FINE_210 = np.load("./patterns/210_bpm_pattern_fine.npy")
+        except Exception as e:
+            print("❌ Error loading BPM patterns:", e)
+            traceback.print_exc()
+            print("Fermeture de l'application...")
+            sys.exit(1)
+                    
 
         self.bpm_pattern = self.BPM_PATTERN_60
         self.bpm_pattern_fine = self.BPM_PATTERN_FINE_60
@@ -148,50 +156,67 @@ class BpmAnalyzer:
                 )
 
     def run_analyzer(self) -> None:
-        while not self.stop_analyzer.is_set():
-            buffer = self.module.audio_streamer.get_buffer()
-            print("Analyzer received buffer.")
-            buffer = self.bandpass_filter(buffer)
-            with self.lock:
-                if bpm_float_str := self.search_bpm(buffer):
-                    self.module.bpm_storage.average_window.append(bpm_float_str[0]) 
-                    bpm_average = round(
-                        (
-                            sum(self.module.bpm_storage.average_window)
-                            / len(self.module.bpm_storage.average_window)
-                        ),
-                        2,
-                    )
-                    (
-                        self.module.bpm_storage._float,
-                        self.module.bpm_storage._str,
-                    ) = bpm_average, format(bpm_average, ".2f")
-                    # if UI is available, update displayed BPM
-                    try:
-                        print("Detected BPM:", self.module.bpm_storage._str)
-                        if hasattr(self.module, "ui") and self.module.ui:
+        """Main analyzer loop with error handling."""
+        try:
+            while not self.stop_analyzer.is_set():
+                try:
+                    buffer = self.module.audio_streamer.get_buffer()
+                    print("Analyzer received buffer.")
+                    buffer = self.bandpass_filter(buffer)
+                    with self.lock:
+                        if bpm_float_str := self.search_bpm(buffer):
+                            self.module.bpm_storage.average_window.append(bpm_float_str[0]) 
+                            bpm_average = round(
+                                (
+                                    sum(self.module.bpm_storage.average_window)
+                                    / len(self.module.bpm_storage.average_window)
+                                ),
+                                2,
+                            )
+                            (
+                                self.module.bpm_storage._float,
+                                self.module.bpm_storage._str,
+                            ) = bpm_average, format(bpm_average, ".2f")
+                            
+                            print("Detected BPM:", self.module.bpm_storage._str)
                             self.module.ui.set_bpm(self.module.bpm_storage._float)
-                            self.module.ableton_link.set_bpm(float(self.module.bpm_storage._float))
-                    except Exception:
-                        pass
+                            self.module.ableton_link.set_bpm(self.module.bpm_storage._float)
+                            
+                except Exception as e:
+                    print(f"❌ Erreur dans la boucle d'analyse: {e}")
+                    traceback.print_exc()
+                    break
+        except Exception as e:
+            print(f"❌ Erreur critique dans run_analyzer: {e}")
+            traceback.print_exc()
+            print("Fermeture de l'application...")
+            sys.exit(1)
                     
 
     def start_run_analyzer_thread(self, input_device_index: int) -> None:
-        print("Starting BPM analyzer thread with device index:", input_device_index)
-        self.stop_analyzer.clear()
-        print("stop_analyzer cleared.")
-        self.module.audio_streamer.start_stream(input_device_index=input_device_index)
-        print("Audio stream started.")
-        self.module.ableton_link.enable(True)
-        print("Ableton Link enabled.")
-        Thread(target=self.run_analyzer, daemon=True).start()
-        print("BPM analyzer thread started.")
+        """Start analyzer thread with error handling."""
+        try:
+            self.stop_analyzer.clear()
+            self.module.audio_streamer.start_stream(input_device_index=input_device_index)
+            self.module.ableton_link.enable(True)
+            Thread(target=self.run_analyzer, daemon=True).start()
+            print("✅ BPM analyzer thread started with device index:", input_device_index)
+        except Exception as e:
+            print(f"❌ Erreur au démarrage de l'analyseur: {e}")
+            traceback.print_exc()
+            raise
         
     def stop_run_analyzer_thread(self) -> None:
-        print("Stopping BPM analyzer thread.")
-        self.stop_analyzer.set()
-        self.module.audio_streamer.stop_stream()
-        self.module.ableton_link.enable(False)
+        """Stop analyzer thread with error handling."""
+        try:
+            self.stop_analyzer.set()
+            self.module.audio_streamer.stop_stream()
+            self.module.ableton_link.enable(False)
+            sleep(0.3)
+            print("✅ BPM analyzer thread stopped.")
+        except Exception as e:
+            print(f"❌ Erreur à l'arrêt de l'analyseur: {e}")
+            traceback.print_exc()
 
     def butter_bandpass(self, lowcut, highcut, fs, order=10):
         """Calculate butterworth bandpass filter coefficients."""
