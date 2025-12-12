@@ -1,315 +1,294 @@
-from PyQt5.QtWidgets import QApplication
-import PySimpleGUI as sg
-import sys
+#!/usr/bin/env python3
+
 import tkinter as tk
-from time import sleep
+from tkinter import ttk
+import pyaudio
+import queue
+from threading import Thread
+from collections import deque
+import threading
+from threading import Thread
 
-sg.theme("Black")
-sg.set_options(dpi_awareness=True)
+from AudioStreamer import AudioStreamer
+from AbletonLink import AbletonLink
+from BpmAnalizer import BpmAnalyzer
+import ExtractBpmPatterns
 
+FRAME_RATE = 11025
 
-# switch object sizes of the ui for low resolution or high resolution screens
-class win_lay:
-    in_win_lst = [[25, 27], [50, 27]]
-    in_win_win = [[280, 139], [600, 200]]
-    main_win_win = [[590, 230], [1150, 435]]
-    main_win_txt_bpm = [[10], [40]]
-    main_win_txt_bpmind = [[10], [20]]
-    main_win_txt_info = [[5], [20]]
-    main_win_bar_size = [[52, 3], [86, 5]]
-    main_win_bar_pad = [[10, 10], [20, 20]]
-    main_win_but_start = [[10], [20]]
-    main_win_but_once = [[5], [20]]
-    main_win_but_link = [[10], [20]]
-    main_win_but_learn = [[5], [20]]
-    make_win_txt_setup = [[100, 15], [211, 20]]
-    make_win_lstin = [[25, 10], [50, 20]]
-    make_win_lstout = [[25, 10], [50, 30]]
-    make_win_txt_info = [[5], [20]]
-    make_win_but_learn_pad = [[5], [50]]
-    make_win_but_learn_size = [[15], [18]]
-    make_win_but_exit = [[10], [35]]
-    make_win_win = [[300, 185], [600, 360]]
+# Predefined BPM range options
+BPM_RANGES = {
+    "60–160": (60, 100),
+    "130–230": (130, 100),
+    "210–300": (210, 90),
+}
 
+class BpmStorage:
+    def __init__(self):
+        self._float = 120.00  # default
+        self._str = "***.**"  # default
+        self.average_window = deque(maxlen=3)
 
-def check_screen_resolution() -> int:
-    app = QApplication(sys.argv)
-    screen = app.screens()[0]
-    dpi = screen.physicalDotsPerInch()
-    app.quit()
-    if dpi > 150:
-        return int(1)
-    else:
-        return int(0)
+class InitialiseModules:
+    def __init__(self):
+        self.bpm_storage = BpmStorage()
+        self.threading_events = ThreadingEvents()
+        self.audio_streamer = AudioStreamer(FRAME_RATE)
+        self.ableton_link = AbletonLink()
+        self.ui = UserInterface()  
+        self.ui.module = self  # Link UI to modules
+        self.ui.start()
 
+class ThreadingEvents:
+    def __init__(self):
+        self.stop_analyzer = threading.Event()
+        self.stop_trigger_set_bpm = threading.Event()
+        self.stop_update_link_button = threading.Event()
+        self.stop_refresh_main_window = threading.Event()
+        self.bpm_updated = threading.Event()
 
-def audio_device_selection(audio_devices: list, resolution: int) -> sg.Window:
-    layout = [
-        [
-            sg.Combo(
-                audio_devices[0],
-                background_color="white",
-                text_color="black",
-                default_value="Choose Audio Input...",
-                key="board",
-                enable_events=True,
-                readonly=True,
-                pad=(
-                    win_lay.in_win_lst[resolution][0],
-                    win_lay.in_win_lst[resolution][1],
-                ),
-            )
-        ],
-        [
-            sg.Button(
-                key="Next",
-                button_text="NEXT",
-                border_width=0,
-                size=(7, 1),
-                disabled=True,
-                focus=True,
-                pad=(15, 0),
-            )
-        ],
-    ]
+    def stop_threads(self) -> None:
+        self.stop_analyzer.set()
+        self.stop_trigger_set_bpm.set()
+        self.stop_update_link_button.set()
+        self.stop_refresh_main_window.set()
+        
+    def start_update_link_button_thread(main_window: object, modules: object) -> None:
+        Thread(
+            target=UserInterface.update_link_button,
+            args=(main_window, modules),
+        ).start()
+        
+        
+    def start_run_analyzer_thread(modules: object) -> None:
+        Thread(
+            target=BpmAnalyzer.run_analyzer, args=(modules,), daemon=True
+        ).start()
+        
 
-    window = sg.Window(
-        "Live BPM Analyzer",
-        layout,
-        no_titlebar=False,
-        titlebar_icon="./bpm.png",
-        finalize=True,
-        size=(win_lay.in_win_win[resolution][0], win_lay.in_win_win[resolution][1]),
-        titlebar_text_color="#ffffff",
-        use_custom_titlebar=True,
-        titlebar_background_color="#000000",
-        titlebar_font=("Arial", 12),
-    )
-    window.set_icon("./bpm.ico")
-    return window
+class UserInterface:
+    """Minimal Tk UI exposing start() and set_bpm(value).
 
+    The mainloop runs in a background thread so the analyzer can call set_bpm.
+    """
 
-def midi_device_selection(
-    available_ports_in, available_ports_out, resolution: int
-) -> sg.Window:
-    layout = [
-        [
-            sg.Text(
-                "MIDI SETUP",
-                background_color="blue",
-                pad=(
-                    win_lay.make_win_txt_setup[resolution][0],
-                    win_lay.make_win_txt_setup[resolution][1],
-                ),
-            )
-        ],
-        [
-            sg.Combo(
-                available_ports_in,
-                default_value="choose midi input...",
-                pad=(
-                    win_lay.make_win_lstin[resolution][0],
-                    win_lay.make_win_lstin[resolution][1],
-                ),
-                size=(31, 1),
-                background_color="white",
-                text_color="black",
-                key="midiinput",
-                enable_events=True,
-                readonly=True,
-            )
-        ],
-        [
-            sg.Combo(
-                available_ports_out,
-                default_value="choose midi output...",
-                pad=(
-                    win_lay.make_win_lstout[resolution][0],
-                    win_lay.make_win_lstout[resolution][1],
-                ),
-                size=(31, 1),
-                background_color="white",
-                text_color="black",
-                key="midioutput",
-                enable_events=True,
-                readonly=True,
-            )
-        ],
-        [
-            sg.Text(
-                key="infomidi",
-                pad=(win_lay.make_win_txt_info[resolution][0], 1),
-                font=("", 9),
-                background_color="blue",
-                text_color="black",
-            )
-        ],
-        [
-            sg.Button(
-                key="learnsendbpm",
-                border_width=0,
-                disabled=True,
-                button_text="LEARN SEND BPM",
-                pad=(win_lay.make_win_but_learn_pad[resolution][0], 1),
-                size=(win_lay.make_win_but_learn_size[resolution][0], 1),
-            ),
-            sg.Button(
-                key="Exit",
-                border_width=0,
-                button_text="EXIT",
-                pad=(win_lay.make_win_but_exit[resolution][0], 1),
-                size=(6, 1),
-            ),
-        ],
-    ]
-    return sg.Window(
-        "title",
-        layout,
-        finalize=True,
-        no_titlebar=True,
-        background_color="blue",
-        size=(win_lay.make_win_win[resolution][0], win_lay.make_win_win[resolution][1]),
-        grab_anywhere=True,
-        titlebar_icon="./bpm.png",
-    )
+    def __init__(self):
+        self.module = None  # to be set by InitialiseModules
+        self.root = tk.Tk()
+        self.root.title("Ableton Link BPM Analyzer")
+        self.root.geometry("735x260")
 
+        header = tk.Frame(self.root, padx=10, pady=6)
+        header.pack(fill=tk.X)
 
-def midi_device_selection_done(resolution: int) -> sg.Window:
-    layout = [
-        [
-            sg.Text(
-                "MIDI SETUP DONE",
-                background_color="blue",
-                pad=(
-                    win_lay.make_win_txt_setup[resolution][0],
-                    win_lay.make_win_txt_setup[resolution][1],
-                ),
-            )
-        ],
-        [
-            sg.Button(
-                key="Exit",
-                border_width=0,
-                button_text="OK",
-                pad=(win_lay.make_win_but_exit[resolution][0], 1),
-                size=(6, 1),
-            ),
-        ],
-    ]
-    return sg.Window(
-        "title",
-        layout,
-        no_titlebar=True,
-        finalize=True,
-        background_color="blue",
-        size=(win_lay.make_win_win[resolution][0], win_lay.make_win_win[resolution][1]),
-        grab_anywhere=True,
-        titlebar_icon="./bpm.png",
-    )
+        tk.Label(header, text="Ableton Link BPM Analyzer", font=(None, 14)).pack(side=tk.LEFT)
 
+        self.bpm_var = tk.StringVar(value="***.**")
+        tk.Label(header, textvariable=self.bpm_var, font=("Helvetica", 36, "bold"), fg="#1a73e8").pack(side=tk.RIGHT)
 
-def main_window(resolution: int) -> sg.Window:
-    layout = [
-        [
-            sg.Text(
-                "***.**",
-                key="bpm",
-                font=("", 77),
-                pad=(win_lay.main_win_txt_bpm[resolution][0], 1),
-            ),
-            sg.Text(
-                "BPM",
-                key="bpmindicate",
-                font=("", 26),
-                text_color="blue",
-                pad=(win_lay.main_win_txt_bpmind[resolution][0], 1),
-            ),
-        ],
-        [
-            sg.Text(
-                key="info",
-                pad=(win_lay.main_win_txt_info[resolution][0], 1),
-                font=("", 9),
-            )
-        ],
-        [
-            sg.ProgressBar(
-                150,
-                orientation="h",
-                size=(
-                    win_lay.main_win_bar_size[resolution][0],
-                    win_lay.main_win_bar_size[resolution][1],
-                ),
-                pad=(
-                    win_lay.main_win_bar_pad[resolution][0],
-                    win_lay.main_win_bar_pad[resolution][1],
-                ),
-                border_width=0,
-                key="-PROGRESS_BAR-",
-                bar_color=("Blue", "Blue"),
-            )
-        ],
-        [
-            sg.Button(
-                key="link",
-                button_text="LINK",
-                border_width=0,
-                size=(7, 1),
-                pad=(win_lay.main_win_but_link[resolution][0], 2),
-            ),
-            sg.Button(
-                key="sendbpm",
-                button_text="SEND BPM",
-                border_width=0,
-                size=(11, 1),
-                button_color="black on white",
-            ),
-            sg.Button(
-                key="settings",
-                button_text="SETTINGS",
-                border_width=0,
-                pad=(win_lay.main_win_but_learn[resolution][0], 2),
-                size=(10, 1),
-            ),
-        ],
-    ]
-    return sg.Window(
-        "Live BPM Analyzer",
-        layout,
-        no_titlebar=False,
-        finalize=True,
-        titlebar_icon="./bpm.png",
-        size=(win_lay.main_win_win[resolution][0], win_lay.main_win_win[resolution][1]),
-        titlebar_text_color="#ffffff",
-        use_custom_titlebar=True,
-        titlebar_background_color="#000000",
-        titlebar_font=("Arial", 12),
-        grab_anywhere=True,
-        icon="./bpm.ico",
-    )
+        frame = tk.Frame(self.root, padx=10, pady=10)
+        frame.pack(expand=True, fill=tk.BOTH)
+
+        dev_frame = tk.Frame(frame)
+        dev_frame.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(dev_frame, text="Périphérique audio:").pack(side=tk.LEFT)
+        self.device_var = tk.StringVar()
+        self.combobox = ttk.Combobox(dev_frame, textvariable=self.device_var, state="readonly", width=50)
+        self.combobox.pack(side=tk.LEFT, padx=(6, 6))
+        tk.Button(dev_frame, text="Rafraîchir", command=self.refresh_devices).pack(side=tk.LEFT)
+
+        # BPM range selector
+        range_frame = tk.Frame(frame)
+        range_frame.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(range_frame, text="Plage BPM:").pack(side=tk.LEFT)
+        self.range_var = tk.StringVar(value="60–160")
+        self.range_combobox = ttk.Combobox(range_frame, textvariable=self.range_var, values=list(BPM_RANGES.keys()), state="readonly", width=20)
+        self.range_combobox.pack(side=tk.LEFT, padx=(6, 6))
+        self.range_combobox.bind("<<ComboboxSelected>>", self.on_range_change)
+     
+
+        # Activate button (placeholder behavior)
+        self.is_active = False
+        self.after_id = None
+        
+        # Frame for Activate button and client count below
+        button_frame = tk.Frame(frame)
+        button_frame.pack(pady=(6, 6))
+        
+        self.activate_btn = tk.Button(button_frame, text="Activate", command=self.toggle_activate, width=12)
+        self.activate_btn.pack()
+        
+        # Ableton Link client count display (below button)
+        self.ableton_clients_var = tk.StringVar(value="")
+        self.ableton_clients_label = tk.Label(button_frame, textvariable=self.ableton_clients_var, font=("Helvetica", 10, "bold"), fg="#4285F4")
+        self.ableton_clients_label.pack(pady=(4, 0))
+
+        self.orig_bg = self.activate_btn.cget("bg")
+        self.orig_fg = self.activate_btn.cget("fg")
+
+        self.refresh_devices()
+        # Queue for thread-safe BPM updates from analyzer threads.
+        self._bpm_queue = queue.Queue()
+        # Start polling the queue in the mainloop to update the UI.
+        self.root.after(500, self._process_bpm_queue)
+        # Start updating Ableton Link client count
+        self.root.after(500, self._update_ableton_link_clients)
+
+    def get_audio_devices(self):
+        try:
+            p = pyaudio.PyAudio()
+        except Exception:
+            return []
+        names = []
+        try:
+            for i in range(p.get_device_count()):
+                info = p.get_device_info_by_index(i)
+                names.append(info.get("name", "unknown"))
+        finally:
+            p.terminate()
+        seen = set()
+        return [x for x in names if not (x in seen or seen.add(x))]
+
+    def refresh_devices(self):
+        # Use AudioStreamer to get device names and indices to avoid
+        # passing a string device name later to PyAudio (which expects an
+        # integer index). AudioStreamer.available_audio_devices() returns
+        # [names, indices].
+        try:
+            devices, indices = self.audio_streamer.available_audio_devices()
+        except Exception:
+            devices = self.get_audio_devices()
+            indices = [None] * len(devices)
+        self.device_indices = indices
+        self.combobox["values"] = devices
+        if devices:
+            self.device_var.set(devices[0])
+
+    def set_bpm(self, value=None):
+        """Thread-safe entry point called by analyzer threads.
+
+        Instead of calling root.after from worker threads (which can fail if
+        the mainloop isn't running in the same context), we enqueue the value
+        and let the UI mainloop process it via _process_bpm_queue().
+        """
+        try:
+            # keep a lightweight log for debugging
+            print("UserInterface.set_bpm enqueue:", value)
+            self._bpm_queue.put(value)
+        except Exception:
+            # If queueing fails, ignore — UI shouldn't crash because of analyzer
+            pass
+
+    def _process_bpm_queue(self):
+        """Called in the Tk mainloop to drain the queue and update the label."""
+        updated = False
+        try:
+            while not self._bpm_queue.empty():
+                value = self._bpm_queue.get_nowait()
+                try:
+                    if value is None:
+                        self.bpm_var.set("***.**")
+                    else:
+                        v = float(value)
+                        self.bpm_var.set(f"{v:.2f}")
+                    updated = True
+                except Exception:
+                    self.bpm_var.set("***.**")
+        except Exception:
+            # ignore queue errors
+            pass
+        # schedule next poll
+        self.root.after(100, self._process_bpm_queue)
+
+    def _update_ableton_link_clients(self):
+        """Periodically update the Ableton Link client count display."""
+        try:
+            if hasattr(self.module, 'ableton_link') and self.module.ableton_link:
+                num_clients = self.module.ableton_link.get_num_peers()
+                if num_clients is not None and num_clients >= 0:
+                    self.ableton_clients_var.set(str(num_clients))
+                else:
+                    self.ableton_clients_var.set("")
+            else:
+                self.ableton_clients_var.set("")
+        except Exception:
+            self.ableton_clients_var.set("")
+        # schedule next update
+        self.root.after(500, self._update_ableton_link_clients)
 
 
-def update_link_button(main_window: object, modules: object) -> None:
-    isOn = 0
-    button_info = {
-        0: ("LINK", "white on blue"),
-        1: ("1 LINK", "white on blue"),
-        2: ("2 LINKS", "white on blue"),
-        3: ("3 LINKS", "white on blue"),
-    }
-    while True:
-        if main_window == sg.WIN_CLOSED:
-            break
-        if modules.ableton_link.link.enabled == False:
-            break
-        peers = (
-            modules.ableton_link.num_peers()
-            if modules.ableton_link.link.enabled == True
-            else peers
-        )
-        if peers in button_info and peers != isOn:
-            main_window.Element("link").Update(
-                button_info[peers][0], button_color=button_info[peers][1]
-            )
-            isOn = peers
-        sleep(0.04)
+    def _simulate_update(self):
+        import random
+
+        if random.random() > 0.4:
+            self.set_bpm(random.uniform(60, 180))
+        else:
+            self.set_bpm(None)
+        if self.is_active:
+            self.after_id = self.root.after(1000, self._simulate_update)
+
+    def toggle_activate(self):
+        if not self.is_active:
+            self.is_active = True
+            self.activate_btn.config(text="Deactivate", bg=self.orig_bg, fg=self.orig_fg)
+            # Use the integer device index mapped by refresh_devices()
+            idx = self.get_selected_device_index()
+            self.module.audio_streamer.start_stream(input_device_index=idx)
+            self.module.ableton_link.enable(True)
+            ThreadingEvents.start_run_analyzer_thread(self.module)
+        else:
+            self.is_active = False
+            if self.after_id:
+                try:
+                    self.root.after_cancel(self.after_id)
+                except Exception:
+                    pass
+                self.after_id = None
+            # Stop the audio stream if it was started.
+            try:
+                if hasattr(self.module.audio_streamer, "stop_stream"):
+                    self.module.audio_streamer.stop_stream()
+                    ThreadingEvents.stop_threads()
+                    self.module.ableton_link.enable(True)
+            except Exception:
+                # ignore stop errors; the UI should remain responsive
+                pass
+            self.activate_btn.config(text="Activate", bg=self.orig_bg, fg=self.orig_fg)
+            self.set_bpm(None)
+
+    def start(self):
+        self.root.mainloop()
+
+    def get_selected_device_index(self):
+        """Return the integer input_device_index for the currently selected device.
+
+        Returns None if no device or if the selection cannot be mapped to an index.
+        """
+        sel = self.device_var.get()
+        if not sel:
+            return None
+        # Find the selected name index in combobox values
+        try:
+            vals = list(self.combobox["values"])
+            pos = vals.index(sel)
+        except Exception:
+            return None
+        # Map to stored device indices (if available)
+        try:
+            idx = self.device_indices[pos]
+            return int(idx) if idx is not None else None
+        except Exception:
+            return None
+
+    def on_range_change(self, event=None):
+        """Called when user selects a new BPM range from the combobox."""
+        range_name = self.range_var.get()
+        if range_name in BPM_RANGES:
+            print(f"Selected BPM range: {range_name}")
+            BpmAnalyzer.change_bpm_pattern(range_name)
+        else:
+            print(f"Unknown BPM range: {range_name}")
+
+if __name__ == "__main__":
+    InitialiseModules()
+
