@@ -31,6 +31,7 @@ class AudioStreamer:
         return (None, pyaudio.paContinue)
 
     def start_stream(self, input_device_index) -> None:
+       
         self.stream = self.audio.open(
             format=self.format,
             channels=1,
@@ -52,7 +53,6 @@ class AudioStreamer:
     def stop_stream(self):
         self.stream.stop_stream()
         self.stream.close()
-        self.audio.terminate()
 
     def available_audio_devices(self) -> list:
         devices = []

@@ -4,17 +4,7 @@ import tkinter as tk
 from tkinter import ttk
 import pyaudio
 import queue
-from threading import Thread
 from collections import deque
-import threading
-from threading import Thread
-
-from AudioStreamer import AudioStreamer
-from AbletonLink import AbletonLink
-from BpmAnalizer import BpmAnalyzer
-import ExtractBpmPatterns
-
-FRAME_RATE = 11025
 
 # Predefined BPM range options
 BPM_RANGES = {
@@ -28,43 +18,7 @@ class BpmStorage:
         self._float = 120.00  # default
         self._str = "***.**"  # default
         self.average_window = deque(maxlen=3)
-
-class InitialiseModules:
-    def __init__(self):
-        self.bpm_storage = BpmStorage()
-        self.threading_events = ThreadingEvents()
-        self.audio_streamer = AudioStreamer(FRAME_RATE)
-        self.ableton_link = AbletonLink()
-        self.ui = UserInterface()  
-        self.ui.module = self  # Link UI to modules
-        self.ui.start()
-
-class ThreadingEvents:
-    def __init__(self):
-        self.stop_analyzer = threading.Event()
-        self.stop_trigger_set_bpm = threading.Event()
-        self.stop_update_link_button = threading.Event()
-        self.stop_refresh_main_window = threading.Event()
-        self.bpm_updated = threading.Event()
-
-    def stop_threads(self) -> None:
-        self.stop_analyzer.set()
-        self.stop_trigger_set_bpm.set()
-        self.stop_update_link_button.set()
-        self.stop_refresh_main_window.set()
-        
-    def start_update_link_button_thread(main_window: object, modules: object) -> None:
-        Thread(
-            target=UserInterface.update_link_button,
-            args=(main_window, modules),
-        ).start()
-        
-        
-    def start_run_analyzer_thread(modules: object) -> None:
-        Thread(
-            target=BpmAnalyzer.run_analyzer, args=(modules,), daemon=True
-        ).start()
-        
+             
 
 class UserInterface:
     """Minimal Tk UI exposing start() and set_bpm(value).
@@ -72,11 +26,12 @@ class UserInterface:
     The mainloop runs in a background thread so the analyzer can call set_bpm.
     """
 
-    def __init__(self):
-        self.module = None  # to be set by InitialiseModules
+    def __init__(self, module):
+        self.module = module
         self.root = tk.Tk()
         self.root.title("Ableton Link BPM Analyzer")
         self.root.geometry("735x260")
+        
 
         header = tk.Frame(self.root, padx=10, pady=6)
         header.pack(fill=tk.X)
@@ -155,7 +110,7 @@ class UserInterface:
         # integer index). AudioStreamer.available_audio_devices() returns
         # [names, indices].
         try:
-            devices, indices = self.audio_streamer.available_audio_devices()
+            devices, indices = self.module.audio_streamer.available_audio_devices()
         except Exception:
             devices = self.get_audio_devices()
             indices = [None] * len(devices)
@@ -216,43 +171,24 @@ class UserInterface:
         # schedule next update
         self.root.after(500, self._update_ableton_link_clients)
 
-
-    def _simulate_update(self):
-        import random
-
-        if random.random() > 0.4:
-            self.set_bpm(random.uniform(60, 180))
-        else:
-            self.set_bpm(None)
-        if self.is_active:
-            self.after_id = self.root.after(1000, self._simulate_update)
-
     def toggle_activate(self):
         if not self.is_active:
             self.is_active = True
             self.activate_btn.config(text="Deactivate", bg=self.orig_bg, fg=self.orig_fg)
             # Use the integer device index mapped by refresh_devices()
             idx = self.get_selected_device_index()
-            self.module.audio_streamer.start_stream(input_device_index=idx)
-            self.module.ableton_link.enable(True)
-            ThreadingEvents.start_run_analyzer_thread(self.module)
+            
+            self.module.bpm_analyzer.start_run_analyzer_thread(input_device_index=idx)
         else:
             self.is_active = False
+            self.module.bpm_analyzer.stop_run_analyzer_thread()
             if self.after_id:
                 try:
                     self.root.after_cancel(self.after_id)
                 except Exception:
                     pass
                 self.after_id = None
-            # Stop the audio stream if it was started.
-            try:
-                if hasattr(self.module.audio_streamer, "stop_stream"):
-                    self.module.audio_streamer.stop_stream()
-                    ThreadingEvents.stop_threads()
-                    self.module.ableton_link.enable(True)
-            except Exception:
-                # ignore stop errors; the UI should remain responsive
-                pass
+
             self.activate_btn.config(text="Activate", bg=self.orig_bg, fg=self.orig_fg)
             self.set_bpm(None)
 
@@ -285,10 +221,7 @@ class UserInterface:
         range_name = self.range_var.get()
         if range_name in BPM_RANGES:
             print(f"Selected BPM range: {range_name}")
-            BpmAnalyzer.change_bpm_pattern(range_name)
+            self.module.bpm_analyzer.change_bpm_pattern(range_name)
         else:
             print(f"Unknown BPM range: {range_name}")
-
-if __name__ == "__main__":
-    InitialiseModules()
 
