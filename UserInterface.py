@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import pyaudio
 import queue
 from collections import deque
+import sys
+import traceback
+from AudioStreamer import AudioStreamer
+
+FRAME_RATE = 11025
 
 # Predefined BPM range options
 BPM_RANGES = {
@@ -14,6 +19,7 @@ BPM_RANGES = {
 }
 
 class BpmStorage:
+    """Storage for BPM values."""
     def __init__(self):
         self._float = 120.00  # default
         self._str = "***.**"  # default
@@ -21,12 +27,10 @@ class BpmStorage:
              
 
 class UserInterface:
-    """Minimal Tk UI exposing start() and set_bpm(value).
-
-    The mainloop runs in a background thread so the analyzer can call set_bpm.
-    """
+    """Main UI for BPM analyzer with Tk."""
 
     def __init__(self, module):
+        """Initialize user interface."""
         self.module = module
         self.root = tk.Tk()
         self.root.title("Ableton Link BPM Analyzer")
@@ -46,23 +50,23 @@ class UserInterface:
 
         dev_frame = tk.Frame(frame)
         dev_frame.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(dev_frame, text="Périphérique audio:").pack(side=tk.LEFT)
+        tk.Label(dev_frame, text="Audio Device:").pack(side=tk.LEFT)
         self.device_var = tk.StringVar()
         self.combobox = ttk.Combobox(dev_frame, textvariable=self.device_var, state="readonly", width=50)
         self.combobox.pack(side=tk.LEFT, padx=(6, 6))
-        tk.Button(dev_frame, text="Rafraîchir", command=self.refresh_devices).pack(side=tk.LEFT)
+        tk.Button(dev_frame, text="Refresh", command=self.refresh_devices).pack(side=tk.LEFT)
 
         # BPM range selector
         range_frame = tk.Frame(frame)
         range_frame.pack(fill=tk.X, pady=(0, 8))
-        tk.Label(range_frame, text="Plage BPM:").pack(side=tk.LEFT)
+        tk.Label(range_frame, text="BPM Range:").pack(side=tk.LEFT)
         self.range_var = tk.StringVar(value="60–160")
         self.range_combobox = ttk.Combobox(range_frame, textvariable=self.range_var, values=list(BPM_RANGES.keys()), state="readonly", width=20)
         self.range_combobox.pack(side=tk.LEFT, padx=(6, 6))
         self.range_combobox.bind("<<ComboboxSelected>>", self.on_range_change)
      
 
-        # Activate button (placeholder behavior)
+        # Activate button
         self.is_active = False
         self.after_id = None
         
@@ -84,6 +88,8 @@ class UserInterface:
         self.refresh_devices()
         # Queue for thread-safe BPM updates from analyzer threads.
         self._bpm_queue = queue.Queue()
+        # Flag to prevent BPM enqueueing during shutdown
+        self._accepting_bpm = True
         # Start polling the queue in the mainloop to update the UI.
         self.root.after(500, self._process_bpm_queue)
         # Start updating Ableton Link client count
@@ -105,6 +111,7 @@ class UserInterface:
         return [x for x in names if not (x in seen or seen.add(x))]
 
     def refresh_devices(self):
+        """Refresh audio device list from audio streamer."""
         # Use AudioStreamer to get device names and indices to avoid
         # passing a string device name later to PyAudio (which expects an
         # integer index). AudioStreamer.available_audio_devices() returns
@@ -127,15 +134,17 @@ class UserInterface:
         and let the UI mainloop process it via _process_bpm_queue().
         """
         try:
-            # keep a lightweight log for debugging
-            print("UserInterface.set_bpm enqueue:", value)
-            self._bpm_queue.put(value)
+            # Only enqueue if we're accepting BPM updates (not shutting down)
+            if self._accepting_bpm:
+                # keep a lightweight log for debugging
+                print("UserInterface.set_bpm enqueue:", value)
+                self._bpm_queue.put(value)
         except Exception:
             # If queueing fails, ignore — UI shouldn't crash because of analyzer
             pass
 
     def _process_bpm_queue(self):
-        """Called in the Tk mainloop to drain the queue and update the label."""
+        """Process BPM updates in Tk mainloop and display on UI."""
         updated = False
         try:
             while not self._bpm_queue.empty():
@@ -156,7 +165,7 @@ class UserInterface:
         self.root.after(100, self._process_bpm_queue)
 
     def _update_ableton_link_clients(self):
-        """Periodically update the Ableton Link client count display."""
+        """Update Ableton Link client count display periodically."""
         try:
             if hasattr(self.module, 'ableton_link') and self.module.ableton_link:
                 num_clients = self.module.ableton_link.get_num_peers()
@@ -174,6 +183,7 @@ class UserInterface:
     def toggle_activate(self):
         if not self.is_active:
             self.is_active = True
+            self._accepting_bpm = True  # Enable BPM updates
             self.activate_btn.config(text="Deactivate", bg=self.orig_bg, fg=self.orig_fg)
             # Use the integer device index mapped by refresh_devices()
             idx = self.get_selected_device_index()
@@ -181,6 +191,14 @@ class UserInterface:
             self.module.bpm_analyzer.start_run_analyzer_thread(input_device_index=idx)
         else:
             self.is_active = False
+            self._accepting_bpm = False  # Disable BPM updates immediately
+            # Drain the queue to remove any pending updates
+            try:
+                while not self._bpm_queue.empty():
+                    self._bpm_queue.get_nowait()
+            except Exception:
+                pass
+            
             self.module.bpm_analyzer.stop_run_analyzer_thread()
             if self.after_id:
                 try:
@@ -191,6 +209,7 @@ class UserInterface:
 
             self.activate_btn.config(text="Activate", bg=self.orig_bg, fg=self.orig_fg)
             self.set_bpm(None)
+            self.bpm_var.set("***.**")
 
     def start(self):
         self.root.mainloop()
@@ -217,7 +236,7 @@ class UserInterface:
             return None
 
     def on_range_change(self, event=None):
-        """Called when user selects a new BPM range from the combobox."""
+        """Handle BPM range change from combobox."""
         range_name = self.range_var.get()
         if range_name in BPM_RANGES:
             print(f"Selected BPM range: {range_name}")

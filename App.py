@@ -10,28 +10,29 @@ import traceback
 FRAME_RATE = 11025
 
 class InitialiseModules:
+    """Initialize all application modules."""
     def __init__(self):
         try:
-            print("Initialisation de BpmStorage...")
+            print("Initializing BpmStorage...")
             self.bpm_storage = BpmStorage()
             
-            print("Initialisation d'AudioStreamer...")
+            print("Initializing AudioStreamer...")
             self.audio_streamer = AudioStreamer(FRAME_RATE)
             
-            print("Initialisation d'AbletonLink...")
+            print("Initializing AbletonLink...")
             self.ableton_link = AbletonLink()
             
-            print("Initialisation de BpmAnalyzer...")
+            print("Initializing BpmAnalyzer...")
             self.bpm_analyzer = BpmAnalyzer(self, frame_rate=FRAME_RATE)
             
-            print("Création de l'interface utilisateur...")
+            print("Creating user interface...")
             self.ui = UserInterface(self)
             
-            print("✅ Tous les modules initialisés avec succès")
+            print("✅ All modules initialized successfully")
             self.ui.start()
             
         except Exception as e:
-            print(f"❌ Erreur fatale lors de l'initialisation: {e}")
+            print(f"❌ Fatal initialization error: {e}")
             traceback.print_exc()
             sys.exit(1)
 
@@ -40,6 +41,6 @@ if __name__ == "__main__":
     try:
         InitialiseModules()
     except Exception as e:
-        print(f"❌ Erreur critique: {e}")
+        print(f"❌ Critical error: {e}")
         traceback.print_exc()
         sys.exit(1)

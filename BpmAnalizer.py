@@ -40,7 +40,7 @@ class BpmAnalyzer:
         except Exception as e:
             print("❌ Error loading BPM patterns:", e)
             traceback.print_exc()
-            print("Fermeture de l'application...")
+            print("Closing application...")
             sys.exit(1)
                     
 
@@ -161,7 +161,6 @@ class BpmAnalyzer:
             while not self.stop_analyzer.is_set():
                 try:
                     buffer = self.module.audio_streamer.get_buffer()
-                    print("Analyzer received buffer.")
                     buffer = self.bandpass_filter(buffer)
                     with self.lock:
                         if bpm_float_str := self.search_bpm(buffer):
@@ -183,13 +182,13 @@ class BpmAnalyzer:
                             self.module.ableton_link.set_bpm(self.module.bpm_storage._float)
                             
                 except Exception as e:
-                    print(f"❌ Erreur dans la boucle d'analyse: {e}")
+                    print(f"❌ Error in analysis loop: {e}")
                     traceback.print_exc()
                     break
         except Exception as e:
-            print(f"❌ Erreur critique dans run_analyzer: {e}")
+            print(f"❌ Critical error in run_analyzer: {e}")
             traceback.print_exc()
-            print("Fermeture de l'application...")
+            print("Closing application...")
             sys.exit(1)
                     
 
@@ -202,7 +201,7 @@ class BpmAnalyzer:
             Thread(target=self.run_analyzer, daemon=True).start()
             print("✅ BPM analyzer thread started with device index:", input_device_index)
         except Exception as e:
-            print(f"❌ Erreur au démarrage de l'analyseur: {e}")
+            print(f"❌ Error starting analyzer: {e}")
             traceback.print_exc()
             raise
         
@@ -215,7 +214,7 @@ class BpmAnalyzer:
             sleep(0.3)
             print("✅ BPM analyzer thread stopped.")
         except Exception as e:
-            print(f"❌ Erreur à l'arrêt de l'analyseur: {e}")
+            print(f"❌ Error stopping analyzer: {e}")
             traceback.print_exc()
 
     def butter_bandpass(self, lowcut, highcut, fs, order=10):

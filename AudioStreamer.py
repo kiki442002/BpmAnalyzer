@@ -8,11 +8,12 @@ import sys
 
 
 class AudioStreamer:
+    """Audio stream handler with PyAudio."""
     def __init__(self, frame_rate: int = 11025, operating_range_seconds: int = 12):
-        """Audio streamer wrapper with error handling.
+        """Initialize audio streamer with error handling.
 
         Args:
-            frame_rate: sample rate in Hz (default 44100)
+            frame_rate: sample rate in Hz (default 11025)
             operating_range_seconds: how many seconds of signal to keep in buffer
         """
         try:
@@ -24,23 +25,27 @@ class AudioStreamer:
             self.operating_range_seconds = operating_range_seconds
             self.buffer_updated = threading.Event()
             self.stream = None
-            print("✅ AudioStreamer initialisé avec succès")
+            self.stopping = False  # Flag to stop callback
+            print("✅ AudioStreamer initialized successfully")
         except Exception as e:
-            print(f"❌ Erreur lors de l'initialisation d'AudioStreamer: {e}")
+            print(f"❌ Error initializing AudioStreamer: {e}")
             traceback.print_exc()
             sys.exit(1)
 
     def audio_callback(self, in_data: bytes, frame_count, time_info, status) -> None:
         """Audio callback with error handling."""
         try:
+            # Check if we should stop
+            if self.stopping:
+                return (None, pyaudio.paAbort)
+            
             num_int16_values = len(in_data) // 2
             signal_buffer_int = struct.unpack(f"<{num_int16_values}h", in_data)
             self.signal_buffer.extend(signal_buffer_int)
             self.buffer_updated.set()
-            print("Audio callback received data.")
             return (None, pyaudio.paContinue)
         except Exception as e:
-            print(f"❌ Erreur dans le callback audio: {e}")
+            print(f"❌ Error in audio callback: {e}")
             traceback.print_exc()
             return (None, pyaudio.paAbort)
 
@@ -48,7 +53,7 @@ class AudioStreamer:
         """Start audio stream with error handling."""
         try:
             if input_device_index is None:
-                raise ValueError("❌ Aucun appareil audio sélectionné")
+                raise ValueError("No audio device selected")
 
             self.stream = self.audio.open(
                 format=self.format,
@@ -61,24 +66,22 @@ class AudioStreamer:
                 start=False,
             )
             self.stream.start_stream()
-            print(f"✅ Stream audio démarré avec l'appareil {input_device_index}")
+            print(f"✅ Audio stream started with device {input_device_index}")
         except Exception as e:
-            print(f"❌ Erreur au démarrage du stream: {e}")
+            print(f"❌ Error starting stream: {e}")
             traceback.print_exc()
             raise
 
     def get_buffer(self) -> np.ndarray:
         """Get audio buffer with error handling."""
         try:
-            # Timeout court pour permettre un arrêt rapide
-            if not self.buffer_updated.wait(timeout=0.5):
-                # Pas de timeout fatal — continuer
-                pass
+            # Wait for data with short timeout to allow fast shutdown
+            self.buffer_updated.wait(timeout=1.0)
             buffer = np.array(self.signal_buffer, dtype=np.int16)
             self.buffer_updated.clear()
             return buffer
         except Exception as e:
-            print(f"❌ Erreur lors de la récupération du buffer: {e}")
+            print(f"❌ Error retrieving buffer: {e}")
             traceback.print_exc()
             raise
 
@@ -90,9 +93,9 @@ class AudioStreamer:
                 self.stream.close()
                 self.audio.terminate()
                 self.audio = pyaudio.PyAudio()
-                print("✅ Stream audio arrêté")
+                print("✅ Audio stream stopped")
         except Exception as e:
-            print(f"❌ Erreur à l'arrêt du stream: {e}")
+            print(f"❌ Error stopping stream: {e}")
             traceback.print_exc()
             raise
 
@@ -105,7 +108,7 @@ class AudioStreamer:
             numdevices = info.get("deviceCount")
             
             if numdevices == 0:
-                raise RuntimeError("Aucun appareil audio trouvé sur le système")
+                raise RuntimeError("No audio device found on system")
             
             for i in range(0, numdevices):
                 try:
@@ -116,16 +119,16 @@ class AudioStreamer:
                         devices.append(device)
                         indices_of_devices.append(index_of_device)
                 except Exception as e:
-                    print(f"⚠️  Erreur en énumérant appareil {i}: {e}")
+                    print(f"⚠️  Error enumerating device {i}: {e}")
                     continue
             
             if not devices:
-                raise RuntimeError("Aucun appareil d'entrée audio trouvé")
+                raise RuntimeError("No audio input device found")
             
-            print(f"✅ {len(devices)} appareil(s) audio trouvé(s)")
+            print(f"✅ {len(devices)} audio device(s) found")
             return [devices, indices_of_devices]
             
         except Exception as e:
-            print(f"❌ Erreur lors de l'énumération des appareils: {e}")
+            print(f"❌ Error enumerating devices: {e}")
             traceback.print_exc()
             raise
