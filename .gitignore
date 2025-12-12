@@ -1,2 +1,5 @@
 __pycache__/
 patterns/
+dist/
+BpmAnalyzer.spec
+build/BpmAnalyzer
