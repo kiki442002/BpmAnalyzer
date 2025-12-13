@@ -136,26 +136,10 @@ class BpmAnalyzerBuilder:
         
         self.print_header("Building for macOS 🍎")
         
-        # Detect if we can build universal binaries
-        arch_arg = []
-        try:
-            import struct
-            if struct.calcsize("P") == 8:
-                # 64-bit - try universal2 if possible, fall back to current arch
-                import platform as plat_mod
-                machine = plat_mod.machine()
-                self.print_info(f"Detected architecture: {machine}")
-                
-                if machine == "arm64" or machine == "x86_64":
-                    # Only use universal2 if we have a universal Python
-                    # For now, build for current architecture
-                    pass
-        except Exception as e:
-            self.print_warning(f"Could not detect architecture: {e}")
-        
         args = [
             "pyinstaller",
-            "--onefile",
+            "--onedir",
+            "--windowed",
             "--collect-all=tkinter",
             "--optimize=2",
             "--name=BpmAnalyzer",
@@ -168,6 +152,7 @@ class BpmAnalyzerBuilder:
         ]
         
         self._run_pyinstaller(args)
+        self.print_success("macOS .app bundle created in dist/")
     
     def build_for_windows(self):
         """Build for Windows."""
@@ -189,6 +174,8 @@ class BpmAnalyzerBuilder:
             "--hidden-import=aalink",
             "--hidden-import=scipy",
             "--hidden-import=numpy",
+            "--collect-all=tkinter",
+            "--optimize=2",
         ]
         
         if icon_arg:
@@ -207,13 +194,15 @@ class BpmAnalyzerBuilder:
         
         args = [
             "pyinstaller",
-            "--onefile",
+            "--onefdir",
             "--windowed",
             "--name=BpmAnalyzer",
             "--hidden-import=pyaudio",
             "--hidden-import=aalink",
             "--hidden-import=scipy",
             "--hidden-import=numpy",
+            "--collect-all=tkinter",
+            "--optimize=2",
             "App.py"
         ]
         
