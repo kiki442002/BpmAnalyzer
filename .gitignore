@@ -3,3 +3,4 @@ patterns/
 dist/
 BpmAnalyzer.spec
 build/BpmAnalyzer
+.DS_Store
