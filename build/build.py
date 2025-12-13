@@ -136,6 +136,10 @@ class BpmAnalyzerBuilder:
         
         self.print_header("Building for macOS 🍎")
         
+        # Check for icon
+        icon_path = self.build_dir / "bpm.ico"
+        icon_arg = f"--icon={icon_path}" if icon_path.exists() else ""
+        
         args = [
             "pyinstaller",
             "--onedir",
@@ -148,8 +152,12 @@ class BpmAnalyzerBuilder:
             "--hidden-import=scipy",
             "--hidden-import=numpy",
             "--osx-bundle-identifier=com.bpmanalyzer.app",
-            "App.py"
         ]
+        
+        if icon_arg:
+            args.append(icon_arg)
+        
+        args.append("App.py")
         
         self._run_pyinstaller(args)
         self.print_success("macOS .app bundle created in dist/")
@@ -162,7 +170,7 @@ class BpmAnalyzerBuilder:
         self.print_header("Building for Windows 🪟")
         
         # Check for icon
-        icon_path = self.project_root / "build" / "icon.ico"
+        icon_path = self.build_dir / "bpm.ico"
         icon_arg = f"--icon={icon_path}" if icon_path.exists() else ""
         
         args = [
@@ -180,6 +188,7 @@ class BpmAnalyzerBuilder:
         
         if icon_arg:
             args.append(icon_arg)
+            self.print_success(f"Using icon: {icon_path}")
         
         args.append("App.py")
         
@@ -192,9 +201,13 @@ class BpmAnalyzerBuilder:
         
         self.print_header("Building for Linux 🐧")
         
+        # Check for icon
+        icon_path = self.build_dir / "bpm.ico"
+        icon_arg = f"--icon={icon_path}" if icon_path.exists() else ""
+        
         args = [
             "pyinstaller",
-            "--onefdir",
+            "--onedir",
             "--windowed",
             "--name=BpmAnalyzer",
             "--hidden-import=pyaudio",
@@ -203,8 +216,13 @@ class BpmAnalyzerBuilder:
             "--hidden-import=numpy",
             "--collect-all=tkinter",
             "--optimize=2",
-            "App.py"
         ]
+        
+        if icon_arg:
+            args.append(icon_arg)
+            self.print_success(f"Using icon: {icon_path}")
+        
+        args.append("App.py")
         
         self._run_pyinstaller(args)
         
