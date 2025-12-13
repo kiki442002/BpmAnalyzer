@@ -87,14 +87,8 @@ class BpmAnalyzerBuilder:
             self.print_error(f"Python 3.8+ required, got {sys.version}")
         self.print_success(f"Python {sys.version.split()[0]}")
         
-        # Check patterns folder
-        patterns_dir = self.project_root / "patterns"
-        if not patterns_dir.exists():
-            self.print_error(f"Patterns folder not found at {patterns_dir}")
-        pattern_files = list(patterns_dir.glob("*.npy"))
-        if len(pattern_files) == 0:
-            self.print_error(f"No .npy files found in {patterns_dir}")
-        self.print_success(f"Patterns folder found with {len(pattern_files)} files")
+        # Note: Patterns are generated on first app launch, no need to check here
+        self.print_info("Patterns will be generated on first app launch")
         
         # Check PyInstaller
         try:
