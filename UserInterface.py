@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import pyaudio
 import queue
 from collections import deque
-import sys
-import traceback
-from AudioStreamer import AudioStreamer
+
 
 FRAME_RATE = 11025
 

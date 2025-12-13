@@ -6,6 +6,8 @@ from threading import Thread
 import traceback
 import sys
 from time import sleep
+from pathlib import Path
+import PathUtils
 
 
 
@@ -21,22 +23,33 @@ class BpmAnalyzer:
         self.fine_steps = fine_steps
         self.lock = threading.Lock()
         self.stop_analyzer = threading.Event()
+        
+        # Get patterns directory (handles bundled vs interpreter)
+        self.patterns_dir = PathUtils.get_patterns_dir()
 
         try:
-            self.BPM_PATTERN_60 = np.load("./patterns/60_bpm_pattern.npy")
-            self.BPM_PATTERN_FINE_60 = np.load("./patterns/60_bpm_pattern_fine.npy")
-            self.BPM_PATTERN_130 = np.load("./patterns/130_bpm_pattern.npy")
-            self.BPM_PATTERN_FINE_130 = np.load("./patterns/130_bpm_pattern_fine.npy")
-            self.BPM_PATTERN_210 = np.load("./patterns/210_bpm_pattern.npy")
-            self.BPM_PATTERN_FINE_210 = np.load("./patterns/210_bpm_pattern_fine.npy")
+            pattern_60 = self.patterns_dir / "60_bpm_pattern.npy"
+            pattern_60_fine = self.patterns_dir / "60_bpm_pattern_fine.npy"
+            pattern_130 = self.patterns_dir / "130_bpm_pattern.npy"
+            pattern_130_fine = self.patterns_dir / "130_bpm_pattern_fine.npy"
+            pattern_210 = self.patterns_dir / "210_bpm_pattern.npy"
+            pattern_210_fine = self.patterns_dir / "210_bpm_pattern_fine.npy"
+            
+            self.BPM_PATTERN_60 = np.load(str(pattern_60))
+            self.BPM_PATTERN_FINE_60 = np.load(str(pattern_60_fine))
+            self.BPM_PATTERN_130 = np.load(str(pattern_130))
+            self.BPM_PATTERN_FINE_130 = np.load(str(pattern_130_fine))
+            self.BPM_PATTERN_210 = np.load(str(pattern_210))
+            self.BPM_PATTERN_FINE_210 = np.load(str(pattern_210_fine))
         except FileNotFoundError:
-            ExtractBpmPatterns.extract(self.frame_rate)
-            self.BPM_PATTERN_60 = np.load("./patterns/60_bpm_pattern.npy")
-            self.BPM_PATTERN_FINE_60 = np.load("./patterns/60_bpm_pattern_fine.npy")
-            self.BPM_PATTERN_130 = np.load("./patterns/130_bpm_pattern.npy")
-            self.BPM_PATTERN_FINE_130 = np.load("./patterns/130_bpm_pattern_fine.npy")
-            self.BPM_PATTERN_210 = np.load("./patterns/210_bpm_pattern.npy")
-            self.BPM_PATTERN_FINE_210 = np.load("./patterns/210_bpm_pattern_fine.npy")
+            print(f"⏳ Generating BPM patterns in {self.patterns_dir}...")
+            ExtractBpmPatterns.extract(self.frame_rate, str(self.patterns_dir))
+            self.BPM_PATTERN_60 = np.load(str(self.patterns_dir / "60_bpm_pattern.npy"))
+            self.BPM_PATTERN_FINE_60 = np.load(str(self.patterns_dir / "60_bpm_pattern_fine.npy"))
+            self.BPM_PATTERN_130 = np.load(str(self.patterns_dir / "130_bpm_pattern.npy"))
+            self.BPM_PATTERN_FINE_130 = np.load(str(self.patterns_dir / "130_bpm_pattern_fine.npy"))
+            self.BPM_PATTERN_210 = np.load(str(self.patterns_dir / "210_bpm_pattern.npy"))
+            self.BPM_PATTERN_FINE_210 = np.load(str(self.patterns_dir / "210_bpm_pattern_fine.npy"))
         except Exception as e:
             print("❌ Error loading BPM patterns:", e)
             traceback.print_exc()
