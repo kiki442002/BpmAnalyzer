@@ -1,6 +1,5 @@
 # BpmAnalyzer
 
-
 ---
 
 ## 📋 Overview
@@ -11,7 +10,7 @@ Whether you're performing with Ableton Live, controlling visual effects, or coll
 
 ### 🎯 Key Features
 
-- ✅ **High Accuracy**: Detects BPM with ±0.10 precision across all music genres
+- ✅ **High Accuracy**: Detects BPM with ±0.10 precision across all music genres (depends of the music speed)
 - ✅ **Ableton Link Integration**: Sync with Ableton Live, other DAWs, and VJ software
 - ✅ **Multiple BPM Ranges**: 60-160, 130-230, and 210-300 BPM detection
 - ✅ **Low-Quality Signal Support**: Works with microphone input and noisy sources
@@ -97,7 +96,7 @@ BpmAnalyzer supports **Ableton Link**, allowing instant synchronization with:
 - VJ software and visual synthesizers
 - Hardware instruments
 
-The application displays the number of connected Link clients at the bottom of the interface.
+~~The application displays the number of connected Link clients at the bottom of the interface.~~
 
 ---
 
@@ -126,32 +125,7 @@ BpmAnalyzer uses **pattern-matching algorithms** based on frame correlation and 
 - Matches patterns against pre-computed BPM templates
 - Generates accurate BPM values with fine-tuning
 
-### Performance
-- **Latency**: ~500ms detection time
-- **Accuracy**: ±0.10 BPM
-- **CPU Usage**: ~5-10% on modern systems
-- **Memory**: ~100-150 MB
-
 ---
-
-## 🛠️ System Requirements
-
-### Minimum
-- **CPU**: Dual-core processor
-- **RAM**: 512 MB
-- **Audio**: Line-in or microphone input
-
-### Recommended
-- **CPU**: Quad-core processor
-- **RAM**: 2 GB
-- **Audio**: External audio interface
-- **OS**: macOS 10.14+, Windows 10+, or modern Linux
-
----
-
-## 🔧 Configuration
-
-All configuration is done through the GUI. No config files needed.
 
 ### Default Settings
 - Sample Rate: 11,025 Hz
@@ -183,12 +157,6 @@ All configuration is done through the GUI. No config files needed.
 - Both applications must be on the same network
 - Check firewall settings
 
----
-
-## 📜 License
-
-This project is open source. See LICENSE file for details.
-
 ### Attribution
 
 BpmAnalyzer is based on innovative BPM detection algorithms. Special thanks to the creators of the original concept and pattern-matching methodology.
@@ -211,18 +179,6 @@ For questions, issues, or suggestions:
 - Open an issue on GitHub
 - Check existing documentation
 - Review the build/README.md for compilation issues
-
----
-
-## 🔄 Version History
-
-### v1.0.0
-- Initial release
-- Multi-platform support (macOS, Windows, Linux)
-- Ableton Link integration
-- Real-time BPM detection
-- Three BPM range presets
-- Pattern-based detection algorithm
 
 ---
 
