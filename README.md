@@ -1,14 +1,5 @@
-# ![plot](./bpm.png) BpmAnalyzer
+# BpmAnalyzer
 
-<p align="center">
-  <strong>Real-time BPM Detection and Synchronization for Live Performance</strong>
-</p>
-
-<br/>
-
-<p align="center">
-  <img src="./UI.png" alt="BpmAnalyzer Interface">
-</p>
 
 ---
 
