@@ -201,7 +201,7 @@ class BpmAnalyzerBuilder:
         
         args = [
             "pyinstaller",
-            "--onedir",
+            "--onefile",
             "--windowed",
             "--name=BpmAnalyzer",
             "--hidden-import=pyaudio",
