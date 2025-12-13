@@ -96,7 +96,7 @@ BpmAnalyzer supports **Ableton Link**, allowing instant synchronization with:
 - VJ software and visual synthesizers
 - Hardware instruments
 
-~~The application displays the number of connected Link clients at the bottom of the interface.~~
+The application displays the number of connected Link clients at the bottom of the deactivating button.
 
 ---
 
