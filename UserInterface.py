@@ -87,7 +87,7 @@ class UserInterface:
         # Queue for thread-safe BPM updates from analyzer threads.
         self._bpm_queue = queue.Queue()
         # Flag to prevent BPM enqueueing during shutdown
-        self._accepting_bpm = True
+        self._accepting_bpm = False
         # Start polling the queue in the mainloop to update the UI.
         self.root.after(500, self._process_bpm_queue)
         # Start updating Ableton Link client count
@@ -135,7 +135,6 @@ class UserInterface:
             # Only enqueue if we're accepting BPM updates (not shutting down)
             if self._accepting_bpm:
                 # keep a lightweight log for debugging
-                print("UserInterface.set_bpm enqueue:", value)
                 self._bpm_queue.put(value)
         except Exception:
             # If queueing fails, ignore — UI shouldn't crash because of analyzer
@@ -160,21 +159,24 @@ class UserInterface:
             # ignore queue errors
             pass
         # schedule next poll
-        self.root.after(100, self._process_bpm_queue)
+        self.root.after(500, self._process_bpm_queue)
 
     def _update_ableton_link_clients(self):
         """Update Ableton Link client count display periodically."""
-        try:
-            if hasattr(self.module, 'ableton_link') and self.module.ableton_link:
-                num_clients = self.module.ableton_link.get_num_peers()
-                if num_clients is not None and num_clients >= 0:
-                    self.ableton_clients_var.set(str(num_clients))
+        # Only update if accepting BPM (not shutting down)
+        if self._accepting_bpm:
+            try:
+                if hasattr(self.module, 'ableton_link') and self.module.ableton_link:
+                    num_clients = self.module.ableton_link.get_num_peers()
+                    if num_clients is not None and num_clients >= 0:
+                        self.ableton_clients_var.set(str(num_clients))
+                    else:
+                        self.ableton_clients_var.set("")
                 else:
                     self.ableton_clients_var.set("")
-            else:
+            except Exception:
                 self.ableton_clients_var.set("")
-        except Exception:
-            self.ableton_clients_var.set("")
+
         # schedule next update
         self.root.after(500, self._update_ableton_link_clients)
 
@@ -206,8 +208,11 @@ class UserInterface:
                 self.after_id = None
 
             self.activate_btn.config(text="Activate", bg=self.orig_bg, fg=self.orig_fg)
+
+            # Reset BPM and client count display
             self.set_bpm(None)
             self.bpm_var.set("***.**")
+            self.ableton_clients_var.set("")
 
     def start(self):
         self.root.mainloop()

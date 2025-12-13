@@ -37,8 +37,9 @@ class AbletonLink:
                 except Exception:
                     pass
 
-    def num_peers(self) -> int:
-        return self.link.numPeers()
+    def get_num_peers(self) -> int:
+        """Get the number of connected Ableton Link peers."""
+        return self.link.num_peers
 
     def set_bpm(self, bpm: float) -> None:
         """Set the BPM in Ableton Link.
